@@ -1,0 +1,64 @@
+
+name: Build SberKids IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'SberKidsApp.swift'
+      - '.github/workflows/build.yml'
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Create Xcode project
+        run: |
+          cat > project.yml <<'EOF'
+          name: SberKids
+          options:
+            bundleIdPrefix: com.sberkids
+          targets:
+            SberKids:
+              type: application
+              platform: iOS
+              deploymentTarget: "16.0"
+              sources:
+                - SberKidsApp.swift
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: com.sberkids.app
+                  INFOPLIST_KEY_CFBundleDisplayName: SberKids
+                  GENERATE_INFOPLIST_FILE: YES
+                  SWIFT_VERSION: 5.0
+          EOF
+          xcodegen generate
+
+      - name: Build IPA
+        run: |
+          xcodebuild \
+            -project SberKids.xcodeproj \
+            -scheme SberKids \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/SberKids.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+          mkdir Payload
+          cp -R build/SberKids.xcarchive/Products/Applications/SberKids.app Payload/
+          zip -r SberKids.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SberKids-IPA
+          path: SberKids.ipa
