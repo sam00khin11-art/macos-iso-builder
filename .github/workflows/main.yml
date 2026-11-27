@@ -1,0 +1,53 @@
+name: Build KidsWallet IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer || true
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build unsigned app archive
+        run: |
+          xcodebuild \
+            -project KidsWallet.xcodeproj \
+            -scheme KidsWallet \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/KidsWallet.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            archive
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH="$RUNNER_TEMP/KidsWallet.xcarchive/Products/Applications/KidsWallet.app"
+          test -d "$APP_PATH"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/ipa/Payload/KidsWallet.app"
+          cd "$RUNNER_TEMP/ipa"
+          /usr/bin/zip -r "$GITHUB_WORKSPACE/KidsWallet-unsigned.ipa" Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KidsWallet-unsigned-IPA
+          path: KidsWallet-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
